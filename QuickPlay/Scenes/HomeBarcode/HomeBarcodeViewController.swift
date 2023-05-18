@@ -110,14 +110,31 @@ extension HomeBarcodeViewController: AVCaptureMetadataOutputObjectsDelegate {
         if metadataObject.type == .qr || metadataObject.type == .code128 {
             if let qrValue = metadataObject.stringValue {
                 print ("Code value is = \(qrValue)")
-                captureSession.stopRunning()
-                let url: URL = URL(string: qrValue)!
-                playerView = AVPlayer(url: url as URL)
-                playerViewController.player = playerView
                 
-                self.present(playerViewController, animated: true) {
+                let url: URL = URL(string: qrValue)!
+                
+                let videoAsset = AVAsset(url: url)
+
+                let assetLength = Float(videoAsset.duration.value) / Float(videoAsset.duration.timescale)
+
+                if assetLength > 0 {
+                    if captureSession.isRunning {
+                        captureSession.stopRunning()
+                    }
+                    playerView = AVPlayer(url: url as URL)
+                    playerViewController.player = playerView
+                    
+                    self.present(playerViewController, animated: true) {
                         self.playerViewController.player?.play()
+                    }
+                } else {
+                    let alert = UIAlertController(title: "Error", message: "Something Went Wrong", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "Ok", style: .default, handler: { UIAlertAction in
+                        alert.dismiss(animated: true, completion: nil)
+                    }))
+                    self.present(alert, animated: true)
                 }
+                
             }
         }
     }
