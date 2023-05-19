@@ -21,6 +21,7 @@ final class HomeBarcodeViewController: UIViewController {
     
     //UI
     private var scanButton: UIButton!
+    private var closeButton: UIButton!
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -62,15 +63,18 @@ final class HomeBarcodeViewController: UIViewController {
             let input = try AVCaptureDeviceInput(device: captureDevice)
             
             //Set the input device on the capture session
-            captureSession.addInput(input)
+            if captureSession.inputs.isEmpty {
+                self.captureSession.addInput(input)
+            }
             
             //Initialize a AVCAptureMetadataOutput object and set it as the output device to the capture session
             let captureMetaDataOutput = AVCaptureMetadataOutput()
-            captureSession.addOutput(captureMetaDataOutput)
-            
-            //Set delegate and use default dispatch queue to execute the callback
-            captureMetaDataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-            captureMetaDataOutput.metadataObjectTypes = [AVMetadataObject.ObjectType.qr, AVMetadataObject.ObjectType.code128]
+            if captureSession.outputs.isEmpty {
+                captureSession.addOutput(captureMetaDataOutput)
+                //Set delegate and use default dispatch queue to execute the callback
+                captureMetaDataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+                captureMetaDataOutput.metadataObjectTypes = [AVMetadataObject.ObjectType.qr, AVMetadataObject.ObjectType.code128]
+            }
             
             //Initialize the vide preview layer and add it as a sublayer to the viewPreview view's layer
             videoPreviewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
@@ -79,20 +83,45 @@ final class HomeBarcodeViewController: UIViewController {
             view.layer.addSublayer(videoPreviewLayer!)
             
             //Start video capture
-            captureSession.startRunning()
+            self.captureSession.startRunning()
             
             //Initialize QR Code Frame
             qrcodeFrameView = UIView()
             if let qrcodeFrameView = qrcodeFrameView {
-                qrcodeFrameView.layer.borderColor = UIColor.green.cgColor
-                qrcodeFrameView.layer.borderWidth = 2
+                qrcodeFrameView.layer.borderColor = UIColor.systemYellow.cgColor
+                qrcodeFrameView.layer.borderWidth = 5
                 view.addSubview(qrcodeFrameView)
                 view.bringSubviewToFront(qrcodeFrameView)
             }
+            
+            //UI Close Button
+            closeButton = UIButton()
+            closeButton.setImage(UIImage(systemName: "xmark.circle"), for: .normal)
+            closeButton.setImage(closeButton.image(for: .normal)?.withRenderingMode(.alwaysTemplate), for: .normal)
+            closeButton.tintColor = .systemYellow
+            closeButton.backgroundColor = nil
+            closeButton.frame.size.height = 50
+            closeButton.frame.size.width = 50
+            closeButton.contentHorizontalAlignment = .fill
+            closeButton.contentVerticalAlignment = .fill
+            
+            closeButton.addTarget(self, action: #selector(closeButtonPressed), for: .touchUpInside)
+            closeButton.center = CGPoint(x: view.frame.size.width/2, y: view.frame.size.height - 140)
+            view.addSubview(closeButton)
+            view.bringSubviewToFront(closeButton)
         } catch {
             print(error)
             return
         }
+    }
+    
+    @objc private func closeButtonPressed() {
+        if captureSession.isRunning {
+            videoPreviewLayer?.removeFromSuperlayer()
+            qrcodeFrameView?.removeFromSuperview()
+            closeButton.removeFromSuperview()
+            captureSession.stopRunning()
+            }
     }
 }
 
@@ -102,15 +131,26 @@ extension HomeBarcodeViewController: AVCaptureMetadataOutputObjectsDelegate {
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         
         if metadataObjects.count == 0 {
+            qrcodeFrameView?.frame = .zero
             print ("No code found")
             return
         }
         let metadataObject = metadataObjects[0] as! AVMetadataMachineReadableCodeObject
         
         if metadataObject.type == .qr || metadataObject.type == .code128 {
+            if let barcodeObject = videoPreviewLayer?.transformedMetadataObject(for: metadataObject){
+                qrcodeFrameView?.frame = barcodeObject.bounds
+            }
+            
             if let qrValue = metadataObject.stringValue {
                 print ("Code value is = \(qrValue)")
-                
+               
+                if captureSession.isRunning {
+                    self.videoPreviewLayer?.removeFromSuperlayer()
+                    self.qrcodeFrameView?.removeFromSuperview()
+                    self.closeButton?.removeFromSuperview()
+                    self.captureSession.stopRunning()
+                    }
                 let url: URL = URL(string: qrValue)!
                 
                 let videoAsset = AVAsset(url: url)
